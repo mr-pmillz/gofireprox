@@ -390,7 +390,7 @@ func (fp *FireProx) createDeployment(apiID *string) (string, string, error) {
 		return "", "", err
 	}
 
-	return aws.ToString(resp.Id), fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", apiID, fp.Options.Region), nil
+	return aws.ToString(resp.Id), fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(apiID), fp.Options.Region), nil
 }
 
 // createAPI ...
