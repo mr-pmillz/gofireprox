@@ -109,7 +109,6 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 	// Load the Shared AWS Configuration (~/.aws/config)
 	var region string
 	if opts.Region == "" {
-		fmt.Printf("No region specified, using default region: us-east-1\n")
 		region = "us-east-1"
 	} else {
 		region = opts.Region
@@ -311,19 +310,18 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 
 	params := make(map[string]string)
 	params["endpointConfigurationTypes"] = "REGIONAL"
-	ir := &apigateway.ImportRestApiInput{
+	return &apigateway.ImportRestApiInput{
 		Parameters: params,
 		Body:       []byte(tmpl),
-	}
-	return ir, nil
+	}, nil
 }
 
 func (fp *FireProx) createDeployment(apiID *string) (string, string, error) {
 	createDeploymentInput := &apigateway.CreateDeploymentInput{
 		RestApiId:        apiID,
-		StageDescription: aws.String("GoFireProx Prod"),
-		StageName:        aws.String("GoFireProx"),
-		Description:      aws.String("GoFireProx Production Deployment"),
+		StageDescription: aws.String("FireProx Prod"),
+		StageName:        aws.String("fireprox"),
+		Description:      aws.String("FireProx Production Deployment"),
 	}
 
 	resp, err := fp.Client.CreateDeployment(context.TODO(), createDeploymentInput)
