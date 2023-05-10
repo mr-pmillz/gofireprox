@@ -98,7 +98,7 @@ func main() {
 		ApiId:           *apiId,
 		Url:             *proxyURL,
 	}
-	
+
 	fp, err := NewFireProx(fpOptions)
 	if err != nil {
 		log.Fatal(err)
