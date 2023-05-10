@@ -3,7 +3,6 @@
 .idea/*
 *.txt
 *.yaml
-*.yml
 *.json
 *.log
 gofireprox
