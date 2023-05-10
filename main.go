@@ -89,29 +89,19 @@ func main() {
 	proxyURL := flag.String("url", "", "URL end-point")
 	flag.Parse()
 
-	// Load the Shared AWS Configuration (~/.aws/config)
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(*region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(*accessKey, *secretAccessKey, *sessionToken)),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	fpOptions := &FireProxOptions{
 		AccessKey:       *accessKey,
 		SecretAccessKey: *secretAccessKey,
 		SessionToken:    *sessionToken,
-		Region:          cfg.Region,
+		Region:          *region,
 		Command:         *command,
 		ApiId:           *apiId,
 		Url:             *proxyURL,
 	}
-
-	client := apigateway.NewFromConfig(cfg)
-	fp := &FireProx{
-		Options: fpOptions,
-		Client:  client,
+	
+	fp, err := NewFireProx(fpOptions)
+	if err != nil {
+		log.Fatal(err)
 	}
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
