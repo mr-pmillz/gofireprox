@@ -61,7 +61,7 @@ func main() {
 		}
 		fmt.Printf("Deleting %s => %s\n", fp.Options.APIID, success)
 	case "create":
-		if _, err = fp.CreateAPI(); err != nil {
+		if _, _, err = fp.CreateAPI(); err != nil {
 			log.Fatal(err)
 		}
 	case "update":

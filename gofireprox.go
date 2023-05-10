@@ -311,30 +311,30 @@ func (fp *FireProx) DeleteAPI(apiID string) bool {
 }
 
 // CreateAPI ...
-func (fp *FireProx) CreateAPI() (string, error) {
+func (fp *FireProx) CreateAPI() (string, string, error) {
 	fmt.Printf("Creating => %s...\n", fp.Options.URL)
 	tmplInfo, err := fp.newTemplateInfo()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	irAPI, err := fp.getTemplate(tmplInfo)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	resp, err := fp.Client.ImportRestApi(context.TODO(), irAPI)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	_, proxyURL, err := fp.createDeployment(resp.Id)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	// apiID string, name string, createdAT string, targetURL string, proxyURL string
 	fp.storeAPI(aws.ToString(resp.Id), tmplInfo.Title, resp.CreatedDate.String(), fp.Options.URL, proxyURL)
 
-	return aws.ToString(resp.Id), nil
+	return aws.ToString(resp.Id), proxyURL, nil
 }
 
 // UpdateAPI ...
