@@ -33,59 +33,6 @@ type FireProxOptions struct {
 	URL             string
 }
 
-// NewFireProx ...
-func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
-	// Load the Shared AWS Configuration (~/.aws/config)
-	var region string
-	if opts.Region == "" {
-		region = "us-east-1"
-	} else {
-		region = opts.Region
-	}
-
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(opts.AccessKey, opts.SecretAccessKey, opts.SessionToken)),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client := apigateway.NewFromConfig(cfg)
-
-	fp := &FireProx{
-		Options: &FireProxOptions{
-			AccessKey:       opts.AccessKey,
-			SecretAccessKey: opts.SecretAccessKey,
-			SessionToken:    opts.SessionToken,
-			Region:          cfg.Region,
-			Command:         opts.Command,
-			APIID:           opts.APIID,
-			URL:             opts.URL,
-		},
-		Client: client,
-	}
-	return fp, nil
-}
-
-func (fp *FireProx) cleanup() {
-	fmt.Println("\n\n\n\n[+] Cleaning up")
-	items, err := fp.listAPIs()
-	if err != nil {
-		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
-	}
-	for _, item := range items {
-		input := &apigateway.DeleteRestApiInput{
-			RestApiId: item.Id,
-		}
-		_, err = fp.Client.DeleteRestApi(context.TODO(), input)
-		if err != nil {
-			log.Println("[ERROR] Failed to delete API:", item.Id)
-		}
-	}
-	fmt.Println()
-}
-
 func main() {
 	accessKey := flag.String("access_key", "", "AWS Access Key")
 	secretAccessKey := flag.String("secret_access_key", "", "AWS Secret Access Key")
@@ -157,6 +104,60 @@ func main() {
 	}
 }
 
+// NewFireProx ...
+func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
+	// Load the Shared AWS Configuration (~/.aws/config)
+	var region string
+	if opts.Region == "" {
+		fmt.Printf("No region specified, using default region: us-east-1\n")
+		region = "us-east-1"
+	} else {
+		region = opts.Region
+	}
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(opts.AccessKey, opts.SecretAccessKey, opts.SessionToken)),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client := apigateway.NewFromConfig(cfg)
+
+	fp := &FireProx{
+		Options: &FireProxOptions{
+			AccessKey:       opts.AccessKey,
+			SecretAccessKey: opts.SecretAccessKey,
+			SessionToken:    opts.SessionToken,
+			Region:          cfg.Region,
+			Command:         opts.Command,
+			APIID:           opts.APIID,
+			URL:             opts.URL,
+		},
+		Client: client,
+	}
+	return fp, nil
+}
+
+func (fp *FireProx) cleanup() {
+	fmt.Println("\n\n\n\n[+] Cleaning up")
+	items, err := fp.listAPIs()
+	if err != nil {
+		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
+	}
+	for _, item := range items {
+		input := &apigateway.DeleteRestApiInput{
+			RestApiId: item.Id,
+		}
+		_, err = fp.Client.DeleteRestApi(context.TODO(), input)
+		if err != nil {
+			log.Println("[ERROR] Failed to delete API:", item.Id)
+		}
+	}
+	fmt.Println()
+}
+
 // getResources ...
 func (fp *FireProx) getResources(apiID string) (string, error) {
 	resourceInput := apigateway.GetResourcesInput{
@@ -191,57 +192,6 @@ func (fp *FireProx) getIntegration(apiID string) (string, error) {
 	}
 
 	return aws.ToString(resp.Uri), nil
-}
-
-// listAPIs ...
-func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
-	input := &apigateway.GetRestApisInput{}
-
-	resp, err := fp.Client.GetRestApis(context.TODO(), input)
-	if err != nil {
-		return nil, err
-	}
-
-	apiIDs := make([]string, len(resp.Items))
-	for i, item := range resp.Items {
-		proxyURL, err := fp.getIntegration(aws.ToString(item.Id))
-		if err != nil {
-			return nil, err
-		}
-		proxyURL = strings.ReplaceAll(proxyURL, "{proxy}", "")
-		proxiedURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(item.Id), fp.Options.Region)
-		fmt.Printf("[%s] (%s) %v: %s => %s\n", item.CreatedDate.String(), aws.ToString(item.Id), item.Name, proxiedURL, proxyURL)
-		apiIDs[i] = *item.Id
-	}
-
-	return resp.Items, nil
-}
-
-// storeAPI ...
-func (fp *FireProx) storeAPI(apiID, name, createdAT, targetURL, proxyURL string) {
-	fmt.Printf("[%v] (%s) %s %s => %s\n", createdAT, apiID, name, proxyURL, targetURL)
-}
-
-// deleteAPI ...
-func (fp *FireProx) deleteAPI(apiItem string) bool {
-	items, err := fp.listAPIs()
-	if err != nil {
-		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
-		return false
-	}
-	for _, item := range items {
-		if apiItem == *item.Id {
-			input := &apigateway.DeleteRestApiInput{
-				RestApiId: item.Id,
-			}
-			_, err = fp.Client.DeleteRestApi(context.TODO(), input)
-			if err != nil {
-				log.Println("[ERROR] Failed to delete API:", item.Id)
-			}
-			return true
-		}
-	}
-	return false
 }
 
 type templateInfo struct {
@@ -384,6 +334,57 @@ func (fp *FireProx) createDeployment(apiID *string) (string, string, error) {
 	return aws.ToString(resp.Id), fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(apiID), fp.Options.Region), nil
 }
 
+// storeAPI ...
+func (fp *FireProx) storeAPI(apiID, name, createdAT, targetURL, proxyURL string) {
+	fmt.Printf("[%v] (%s) %s %s => %s\n", createdAT, apiID, name, proxyURL, targetURL)
+}
+
+// listAPIs ...
+func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
+	input := &apigateway.GetRestApisInput{}
+
+	resp, err := fp.Client.GetRestApis(context.TODO(), input)
+	if err != nil {
+		return nil, err
+	}
+
+	apiIDs := make([]string, len(resp.Items))
+	for i, item := range resp.Items {
+		proxyURL, err := fp.getIntegration(aws.ToString(item.Id))
+		if err != nil {
+			return nil, err
+		}
+		proxyURL = strings.ReplaceAll(proxyURL, "{proxy}", "")
+		proxiedURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(item.Id), fp.Options.Region)
+		fmt.Printf("[%s] (%s) %s: %s => %s\n", item.CreatedDate.String(), aws.ToString(item.Id), aws.ToString(item.Name), proxiedURL, proxyURL)
+		apiIDs[i] = *item.Id
+	}
+
+	return resp.Items, nil
+}
+
+// deleteAPI ...
+func (fp *FireProx) deleteAPI(apiID string) bool {
+	items, err := fp.listAPIs()
+	if err != nil {
+		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
+		return false
+	}
+	for _, item := range items {
+		if apiID == *item.Id {
+			input := &apigateway.DeleteRestApiInput{
+				RestApiId: item.Id,
+			}
+			_, err = fp.Client.DeleteRestApi(context.TODO(), input)
+			if err != nil {
+				log.Println("[ERROR] Failed to delete API:", item.Id)
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // createAPI ...
 func (fp *FireProx) createAPI() (string, error) {
 	fmt.Printf("Creating => %s...\n", fp.Options.URL)
@@ -425,7 +426,6 @@ func (fp *FireProx) updateAPI(apiID, apiURL string) (bool, error) {
 		ResourceId: aws.String(resourceID),
 		RestApiId:  aws.String(apiID),
 		PatchOperations: []types.PatchOperation{{
-			From:  nil,
 			Op:    "replace",
 			Path:  aws.String("/uri"),
 			Value: aws.String(fmt.Sprintf("%s/{proxy}", apiURL)),
