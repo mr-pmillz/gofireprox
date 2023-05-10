@@ -29,8 +29,8 @@ type FireProxOptions struct {
 	SessionToken    string
 	Region          string
 	Command         string
-	ApiId           string
-	Url             string
+	APIID           string
+	URL             string
 }
 
 // NewFireProx ...
@@ -53,8 +53,8 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 			SessionToken:    opts.SessionToken,
 			Region:          cfg.Region,
 			Command:         opts.Command,
-			ApiId:           opts.ApiId,
-			Url:             opts.Url,
+			APIID:           opts.APIID,
+			URL:             opts.URL,
 		},
 		Client: client,
 	}
@@ -85,7 +85,7 @@ func main() {
 	sessionToken := flag.String("session_token", "", "AWS Session Token")
 	region := flag.String("region", "", "AWS Region")
 	command := flag.String("command", "", "Commands: list, create, delete, update")
-	apiId := flag.String("api_id", "", "API ID")
+	apiID := flag.String("api_id", "", "API ID")
 	proxyURL := flag.String("url", "", "URL end-point")
 	flag.Parse()
 
@@ -95,18 +95,19 @@ func main() {
 		SessionToken:    *sessionToken,
 		Region:          *region,
 		Command:         *command,
-		ApiId:           *apiId,
-		Url:             *proxyURL,
+		APIID:           *apiID,
+		URL:             *proxyURL,
 	}
 
 	fp, err := NewFireProx(fpOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-c
+		s := <-c
+		fmt.Printf("CTRL+C detected: %+v\nCleaning up...", s)
 		fp.cleanup()
 		os.Exit(1)
 	}()
@@ -119,20 +120,20 @@ func main() {
 			os.Exit(1)
 		}
 	case "delete":
-		successful := fp.deleteAPI(aws.ToString(apiId))
+		successful := fp.deleteAPI(aws.ToString(apiID))
 		var success string
 		if successful {
 			success = "Success!"
 		} else {
 			success = "Failed!"
 		}
-		fmt.Printf("Deleting %s => %s\n", fp.Options.ApiId, success)
+		fmt.Printf("Deleting %s => %s\n", fp.Options.APIID, success)
 	case "create":
 		if _, err = fp.createAPI(); err != nil {
 			log.Fatal(err)
 		}
 	case "update":
-		successful, err := fp.updateAPI(fp.Options.ApiId, fp.Options.Url)
+		successful, err := fp.updateAPI(fp.Options.APIID, fp.Options.URL)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -238,7 +239,7 @@ type templateInfo struct {
 
 // newTemplateInfo ...
 func (fp *FireProx) newTemplateInfo() (*templateInfo, error) {
-	title, err := url.Parse(fp.Options.Url)
+	title, err := url.Parse(fp.Options.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +253,7 @@ func (fp *FireProx) newTemplateInfo() (*templateInfo, error) {
 
 // getTemplate ...
 func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestApiInput, error) {
-	//Snippet from: https://github.com/ustayready/fireprox/blob/master/fire.py
+	// Snippet from: https://github.com/ustayready/fireprox/blob/master/fire.py
 	tmpl := `{
 		"swagger": "2.0",
 		"info": {
@@ -282,7 +283,7 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 			  ],
 			  "responses": {},
 			  "x-amazon-apigateway-integration": {
-				"uri": "` + fp.Options.Url + `/",
+				"uri": "` + fp.Options.URL + `/",
 				"responses": {
 				  "default": {
 					"statusCode": "200"
@@ -323,7 +324,7 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 			  ],
 			  "responses": {},
 			  "x-amazon-apigateway-integration": {
-				"uri": "` + fp.Options.Url + `/{proxy}",
+				"uri": "` + fp.Options.URL + `/{proxy}",
 				"responses": {
 				  "default": {
 					"statusCode": "200"
@@ -383,18 +384,18 @@ func (fp *FireProx) createAPI() (string, error) {
 }
 
 // updateAPI ...
-func (fp *FireProx) updateAPI(apiId, apiURL string) (bool, error) {
-	resourceID, err := fp.getResources(apiId)
+func (fp *FireProx) updateAPI(apiID, apiURL string) (bool, error) {
+	resourceID, err := fp.getResources(apiID)
 	if err != nil {
 		return false, err
 	}
 	if resourceID != "" {
-		fmt.Printf("Found resource %s for %s\n", resourceID, apiId)
+		fmt.Printf("Found resource %s for %s\n", resourceID, apiID)
 	}
 	updateIntegrationInput := &apigateway.UpdateIntegrationInput{
 		HttpMethod: aws.String("ANY"),
 		ResourceId: aws.String(resourceID),
-		RestApiId:  aws.String(apiId),
+		RestApiId:  aws.String(apiID),
 		PatchOperations: []types.PatchOperation{{
 			From:  nil,
 			Op:    "replace",
@@ -408,6 +409,6 @@ func (fp *FireProx) updateAPI(apiId, apiURL string) (bool, error) {
 		return false, err
 	}
 
-	log.Printf("API updated with ID: %v\n", apiId)
+	log.Printf("API updated with ID: %v\n", apiID)
 	return strings.ReplaceAll(aws.ToString(resp.Uri), "{proxy}", "") == apiURL, nil
 }
