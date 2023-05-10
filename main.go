@@ -347,8 +347,11 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 		}
 	  }`
 
+	params := make(map[string]string)
+	params["endpointConfigurationTypes"] = "REGIONAL"
 	ir := &apigateway.ImportRestApiInput{
-		Body: []byte(tmpl),
+		Parameters: params,
+		Body:       []byte(tmpl),
 	}
 	return ir, nil
 }
