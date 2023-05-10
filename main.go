@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"log"
-	"math/big"
 	"net/url"
 	"os"
 	"os/signal"
@@ -40,14 +38,7 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 	// Load the Shared AWS Configuration (~/.aws/config)
 	var region string
 	if opts.Region == "" {
-		regions := []string{
-			"us-east-2", "us-east-1", "us-west-1", "us-west-2", "eu-west-3",
-			"ap-northeast-1", "ap-northeast-2", "ap-south-1",
-			"ap-southeast-1", "ap-southeast-2", "ca-central-1",
-			"eu-central-1", "eu-west-1", "eu-west-2", "sa-east-1",
-		}
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(regions))))
-		region = regions[num.Int64()]
+		region = "us-east-1"
 	} else {
 		region = opts.Region
 	}
@@ -219,7 +210,7 @@ func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
 		}
 		proxyURL = strings.ReplaceAll(proxyURL, "{proxy}", "")
 		proxiedURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(item.Id), fp.Options.Region)
-		fmt.Printf("[%s] (%s) %v: %s => %s\n", item.CreatedDate, aws.ToString(item.Id), item.Name, proxiedURL, proxyURL)
+		fmt.Printf("[%s] (%s) %v: %s => %s\n", item.CreatedDate.String(), aws.ToString(item.Id), item.Name, proxiedURL, proxyURL)
 		apiIDs[i] = *item.Id
 	}
 
