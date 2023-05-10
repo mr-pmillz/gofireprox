@@ -1,8 +1,7 @@
-package main
+package gofireprox
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -11,10 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"log"
 	"net/url"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -31,77 +27,6 @@ type FireProxOptions struct {
 	Command         string
 	APIID           string
 	URL             string
-}
-
-func main() {
-	accessKey := flag.String("access_key", "", "AWS Access Key")
-	secretAccessKey := flag.String("secret_access_key", "", "AWS Secret Access Key")
-	sessionToken := flag.String("session_token", "", "AWS Session Token")
-	region := flag.String("region", "", "AWS Region")
-	command := flag.String("command", "", "Commands: list, create, delete, update")
-	apiID := flag.String("api_id", "", "API ID")
-	proxyURL := flag.String("url", "", "URL end-point")
-	flag.Parse()
-
-	fpOptions := &FireProxOptions{
-		AccessKey:       *accessKey,
-		SecretAccessKey: *secretAccessKey,
-		SessionToken:    *sessionToken,
-		Region:          *region,
-		Command:         *command,
-		APIID:           *apiID,
-		URL:             *proxyURL,
-	}
-
-	fp, err := NewFireProx(fpOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		s := <-c
-		fmt.Printf("CTRL+C detected: %+v\nCleaning up...", s)
-		fp.cleanup()
-		os.Exit(1)
-	}()
-
-	switch *command {
-	case "list":
-		_, err = fp.listAPIs()
-		if err != nil {
-			log.Println("[ERROR] Failed to list APIs:", err)
-			os.Exit(1)
-		}
-	case "delete":
-		successful := fp.deleteAPI(aws.ToString(apiID))
-		var success string
-		if successful {
-			success = "Success!"
-		} else {
-			success = "Failed!"
-		}
-		fmt.Printf("Deleting %s => %s\n", fp.Options.APIID, success)
-	case "create":
-		if _, err = fp.createAPI(); err != nil {
-			log.Fatal(err)
-		}
-	case "update":
-		successful, err := fp.updateAPI(fp.Options.APIID, fp.Options.URL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		var success string
-		if successful {
-			success = "Success!"
-		} else {
-			success = "Failed!"
-		}
-		fmt.Printf("API Update Complete: %s\n", success)
-	default:
-		fmt.Printf("[ERROR] Unsupported command: %s\n", *command)
-		os.Exit(1)
-	}
 }
 
 // NewFireProx ...
@@ -139,9 +64,10 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 	return fp, nil
 }
 
-func (fp *FireProx) cleanup() {
+// Cleanup ...
+func (fp *FireProx) Cleanup() {
 	fmt.Println("\n\n\n\n[+] Cleaning up")
-	items, err := fp.listAPIs()
+	items, err := fp.ListAPIs()
 	if err != nil {
 		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
 	}
@@ -316,6 +242,7 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 	}, nil
 }
 
+// createDeployment ...
 func (fp *FireProx) createDeployment(apiID *string) (string, string, error) {
 	createDeploymentInput := &apigateway.CreateDeploymentInput{
 		RestApiId:        apiID,
@@ -337,8 +264,8 @@ func (fp *FireProx) storeAPI(apiID, name, createdAT, targetURL, proxyURL string)
 	fmt.Printf("[%v] (%s) %s %s => %s\n", createdAT, apiID, name, proxyURL, targetURL)
 }
 
-// listAPIs ...
-func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
+// ListAPIs ...
+func (fp *FireProx) ListAPIs() ([]types.RestApi, error) {
 	input := &apigateway.GetRestApisInput{}
 
 	resp, err := fp.Client.GetRestApis(context.TODO(), input)
@@ -361,9 +288,9 @@ func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
 	return resp.Items, nil
 }
 
-// deleteAPI ...
-func (fp *FireProx) deleteAPI(apiID string) bool {
-	items, err := fp.listAPIs()
+// DeleteAPI ...
+func (fp *FireProx) DeleteAPI(apiID string) bool {
+	items, err := fp.ListAPIs()
 	if err != nil {
 		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
 		return false
@@ -383,8 +310,8 @@ func (fp *FireProx) deleteAPI(apiID string) bool {
 	return false
 }
 
-// createAPI ...
-func (fp *FireProx) createAPI() (string, error) {
+// CreateAPI ...
+func (fp *FireProx) CreateAPI() (string, error) {
 	fmt.Printf("Creating => %s...\n", fp.Options.URL)
 	tmplInfo, err := fp.newTemplateInfo()
 	if err != nil {
@@ -410,8 +337,8 @@ func (fp *FireProx) createAPI() (string, error) {
 	return aws.ToString(resp.Id), nil
 }
 
-// updateAPI ...
-func (fp *FireProx) updateAPI(apiID, apiURL string) (bool, error) {
+// UpdateAPI ...
+func (fp *FireProx) UpdateAPI(apiID, apiURL string) (bool, error) {
 	resourceID, err := fp.getResources(apiID)
 	if err != nil {
 		return false, err

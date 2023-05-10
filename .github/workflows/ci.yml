@@ -40,7 +40,7 @@ jobs:
         run: |
           go env -w GOFLAGS=-mod=mod
           go mod tidy
-          go build -v .
+          go build -v -o gofireprox ./cmd/gofireprox/main.go
   golangci:
     needs: build
     name: lint
