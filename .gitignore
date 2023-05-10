@@ -1,0 +1,8 @@
+.idea
+.idea/
+.idea/*
+*.txt
+*.yaml
+*.yml
+*.json
+*.log
