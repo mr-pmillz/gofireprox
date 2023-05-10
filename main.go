@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"log"
+	"math/big"
 	"net/url"
 	"os"
 	"os/signal"
@@ -36,8 +38,22 @@ type FireProxOptions struct {
 // NewFireProx ...
 func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 	// Load the Shared AWS Configuration (~/.aws/config)
+	var region string
+	if opts.Region == "" {
+		regions := []string{
+			"us-east-2", "us-east-1", "us-west-1", "us-west-2", "eu-west-3",
+			"ap-northeast-1", "ap-northeast-2", "ap-south-1",
+			"ap-southeast-1", "ap-southeast-2", "ca-central-1",
+			"eu-central-1", "eu-west-1", "eu-west-2", "sa-east-1",
+		}
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(regions))))
+		region = regions[num.Int64()]
+	} else {
+		region = opts.Region
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(opts.Region),
+		config.WithRegion(region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(opts.AccessKey, opts.SecretAccessKey, opts.SessionToken)),
 	)
 	if err != nil {
@@ -210,6 +226,11 @@ func (fp *FireProx) listAPIs() ([]types.RestApi, error) {
 	return resp.Items, nil
 }
 
+// storeAPI ...
+func (fp *FireProx) storeAPI(apiID, name, createdAT, targetURL, proxyURL string) {
+	fmt.Printf("[%v] (%s) %s %s => %s\n", createdAT, apiID, name, proxyURL, targetURL)
+}
+
 // deleteAPI ...
 func (fp *FireProx) deleteAPI(apiItem string) bool {
 	items, err := fp.listAPIs()
@@ -244,10 +265,10 @@ func (fp *FireProx) newTemplateInfo() (*templateInfo, error) {
 		return nil, err
 	}
 	fireProxTitle := fmt.Sprintf("fireprox_%s", title.Hostname())
-	versionDate := time.Now().Format("2006-01-02T15:04:05Z")
+	versionDate := time.Now().Format("2006-01-02 15:04:05")
 	return &templateInfo{
-		Version: fireProxTitle,
-		Title:   versionDate,
+		Version: versionDate,
+		Title:   fireProxTitle,
 	}, nil
 }
 
@@ -356,12 +377,30 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 	return ir, nil
 }
 
+func (fp *FireProx) createDeployment(apiID *string) (string, string, error) {
+	createDeploymentInput := &apigateway.CreateDeploymentInput{
+		RestApiId:        apiID,
+		StageDescription: aws.String("GoFireProx Prod"),
+		StageName:        aws.String("GoFireProx"),
+		Description:      aws.String("GoFireProx Production Deployment"),
+	}
+
+	resp, err := fp.Client.CreateDeployment(context.TODO(), createDeploymentInput)
+	if err != nil {
+		return "", "", err
+	}
+
+	return aws.ToString(resp.Id), fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", apiID, fp.Options.Region), nil
+}
+
 // createAPI ...
 func (fp *FireProx) createAPI() (string, error) {
+	fmt.Printf("Creating => %s...\n", fp.Options.URL)
 	tmplInfo, err := fp.newTemplateInfo()
 	if err != nil {
 		return "", err
 	}
+
 	irAPI, err := fp.getTemplate(tmplInfo)
 	if err != nil {
 		return "", err
@@ -371,17 +410,12 @@ func (fp *FireProx) createAPI() (string, error) {
 		return "", err
 	}
 
-	createDeploymentInput := &apigateway.CreateDeploymentInput{
-		RestApiId:        resp.Id,
-		StageDescription: aws.String("GoFireProx Prod"),
-		StageName:        aws.String("GoFireProx"),
-		Description:      aws.String("GoFireProx Production Deployment"),
-	}
-
-	_, err = fp.Client.CreateDeployment(context.TODO(), createDeploymentInput)
+	_, proxyURL, err := fp.createDeployment(resp.Id)
 	if err != nil {
 		return "", err
 	}
+	// apiID string, name string, createdAT string, targetURL string, proxyURL string
+	fp.storeAPI(aws.ToString(resp.Id), tmplInfo.Title, resp.CreatedDate.String(), fp.Options.URL, proxyURL)
 
 	return aws.ToString(resp.Id), nil
 }
