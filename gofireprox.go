@@ -23,37 +23,76 @@ type FireProxOptions struct {
 	AccessKey       string
 	SecretAccessKey string
 	SessionToken    string
+	Profile         string
 	Region          string
 	Command         string
 	APIID           string
 	URL             string
 }
 
+// List of all AWS regions as of 2023-05-10
+var validRegions = []string{
+	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "af-south-1",
+	"ap-east-1", "ap-south-1", "ap-south-2", "ap-southeast-1", "ap-southeast-2",
+	"ap-southeast-3", "ap-southeast-4", "ap-northeast-1", "ap-northeast-2",
+	"ap-northeast-3", "ca-central-1", "eu-central-1", "eu-central-2",
+	"eu-west-1", "eu-west-2", "eu-west-3", "eu-south-1", "eu-south-2",
+	"eu-north-1", "me-south-1", "me-central-1", "sa-east-1",
+}
+
+// Checks if provided region is valid
+func isValidRegion(region string) bool {
+	for _, validRegion := range validRegions {
+		if region == validRegion {
+			return true
+		}
+	}
+	return false
+}
+
 // NewFireProx ...
 func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
-	// Load the Shared AWS Configuration (~/.aws/config)
+	var cfg aws.Config
+	var err error
+
 	var region string
-	if opts.Region == "" {
+	switch {
+	case opts.Region == "" && opts.Profile == "":
 		region = "us-east-1"
-	} else {
+	case opts.Region == "" && opts.Profile != "":
+		region = "" // This will use the region from the profile
+	case opts.Region != "" && isValidRegion(opts.Region):
 		region = opts.Region
+	default:
+		log.Fatal("Invalid region specified")
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(opts.AccessKey, opts.SecretAccessKey, opts.SessionToken)),
-	)
+	switch {
+	case opts.AccessKey != "" && opts.SecretAccessKey != "":
+		// Load the Shared AWS Configuration (~/.aws/config)
+		cfg, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(region),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(opts.AccessKey, opts.SecretAccessKey, opts.SessionToken)),
+		)
+	case opts.Profile != "":
+		cfg, err = config.LoadDefaultConfig(context.TODO(),
+			config.WithSharedConfigProfile(opts.Profile),
+		)
+	default:
+		cfg, err = config.LoadDefaultConfig(context.TODO())
+	}
 	if err != nil {
+		log.Println("Error loading AWS configuration")
 		log.Fatal(err)
 	}
 
 	client := apigateway.NewFromConfig(cfg)
-
 	fp := &FireProx{
 		Options: &FireProxOptions{
 			AccessKey:       opts.AccessKey,
 			SecretAccessKey: opts.SecretAccessKey,
 			SessionToken:    opts.SessionToken,
+			Profile:         opts.Profile,
 			Region:          cfg.Region,
 			Command:         opts.Command,
 			APIID:           opts.APIID,
