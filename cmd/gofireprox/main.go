@@ -14,8 +14,8 @@ import (
 func main() {
 	accessKey := flag.String("access_key", "", "AWS Access Key")
 	secretAccessKey := flag.String("secret_access_key", "", "AWS Secret Access Key")
-	sessionToken := flag.String("session_token", "", "AWS Session Token. Optional")
-	profile := flag.String("profile", "", "AWS Profile Section to use. Optional")
+	sessionToken := flag.String("session_token", "", "AWS Session Token.")
+	profile := flag.String("profile", "", "AWS Profile Section to use.")
 	region := flag.String("region", "", "AWS Region")
 	command := flag.String("command", "", "Commands: list, create, delete, update")
 	apiID := flag.String("api_id", "", "API ID")
