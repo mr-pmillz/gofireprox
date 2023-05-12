@@ -30,7 +30,7 @@ type FireProxOptions struct {
 	URL             string
 }
 
-// List of all AWS regions as of 2023-05-10
+// List of all AWS regions as of 2023-05-10 except governmental regions.
 var validRegions = []string{
 	"us-east-1", "us-east-2", "us-west-1", "us-west-2", "af-south-1",
 	"ap-east-1", "ap-south-1", "ap-south-2", "ap-southeast-1", "ap-southeast-2",
@@ -116,7 +116,7 @@ func (fp *FireProx) Cleanup() {
 		}
 		_, err = fp.Client.DeleteRestApi(context.TODO(), input)
 		if err != nil {
-			log.Println("[ERROR] Failed to delete API:", item.Id)
+			log.Println("[ERROR] Failed to delete API:", aws.ToString(item.Id))
 		}
 	}
 	fmt.Println()
@@ -205,7 +205,13 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 				  "in": "header",
 				  "required": false,
 				  "type": "string"
-				}
+				},
+			    {
+				"name" : "X-My-X-Amzn-Trace-Id",
+				"in" : "header",
+				"required" : false,
+				"type" : "string"
+			    }
 			  ],
 			  "responses": {},
 			  "x-amazon-apigateway-integration": {
@@ -217,7 +223,8 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 				},
 				"requestParameters": {
 				  "integration.request.path.proxy": "method.request.path.proxy",
-				  "integration.request.header.X-Forwarded-For": "method.request.header.X-My-X-Forwarded-For"
+				  "integration.request.header.X-Forwarded-For": "method.request.header.X-My-X-Forwarded-For",
+				  "integration.request.header.X-Amzn-Trace-Id" : "method.request.header.X-My-X-Amzn-Trace-Id"
 				},
 				"passthroughBehavior": "when_no_match",
 				"httpMethod": "ANY",
@@ -246,7 +253,13 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 				  "in": "header",
 				  "required": false,
 				  "type": "string"
-				}
+				},
+				{
+                  "name" : "X-My-X-Amzn-Trace-Id",
+                  "in" : "header",
+                  "required" : false,
+                  "type" : "string"
+                }
 			  ],
 			  "responses": {},
 			  "x-amazon-apigateway-integration": {
@@ -258,7 +271,8 @@ func (fp *FireProx) getTemplate(tmplInfo *templateInfo) (*apigateway.ImportRestA
 				},
 				"requestParameters": {
 				  "integration.request.path.proxy": "method.request.path.proxy",
-				  "integration.request.header.X-Forwarded-For": "method.request.header.X-My-X-Forwarded-For"
+				  "integration.request.header.X-Forwarded-For": "method.request.header.X-My-X-Forwarded-For",
+				  "integration.request.header.X-Amzn-Trace-Id": "method.request.header.X-My-X-Amzn-Trace-Id"
 				},
 				"passthroughBehavior": "when_no_match",
 				"httpMethod": "ANY",
@@ -341,7 +355,7 @@ func (fp *FireProx) DeleteAPI(apiID string) bool {
 			}
 			_, err = fp.Client.DeleteRestApi(context.TODO(), input)
 			if err != nil {
-				log.Println("[ERROR] Failed to delete API:", item.Id)
+				log.Println("[ERROR] Failed to delete API:", aws.ToString(item.Id))
 			}
 			return true
 		}
