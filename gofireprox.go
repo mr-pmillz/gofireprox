@@ -145,6 +145,10 @@ func (fp *FireProx) getIntegration(apiID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if resourceID == "" {
+		log.Printf("apiID: %v returned an empty ResourceID: %v\n", apiID, resourceID)
+		return "", nil
+	}
 	integrationInput := apigateway.GetIntegrationInput{
 		HttpMethod: aws.String("ANY"),
 		ResourceId: &resourceID,
