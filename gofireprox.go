@@ -3,15 +3,16 @@ package gofireprox
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
-	"log"
-	"net/url"
-	"strings"
-	"time"
 )
 
 type FireProx struct {
@@ -110,6 +111,7 @@ func (fp *FireProx) Cleanup() {
 	if err != nil {
 		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
 	}
+	time.Sleep(5 * time.Second)
 	for _, item := range items {
 		input := &apigateway.DeleteRestApiInput{
 			RestApiId: item.Id,
@@ -352,6 +354,7 @@ func (fp *FireProx) DeleteAPI(apiID string) bool {
 		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
 		return false
 	}
+	time.Sleep(5 * time.Second)
 	for _, item := range items {
 		if apiID == *item.Id {
 			input := &apigateway.DeleteRestApiInput{

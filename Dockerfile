@@ -1,4 +1,4 @@
-FROM golang:1.20.4-alpine AS builder
+FROM golang:1.21.3-alpine AS builder
 
 ENV GO111MODULE=on
 RUN apk add --no-cache git build-base gcc musl-dev mercurial
