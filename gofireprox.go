@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -18,6 +19,7 @@ import (
 type FireProx struct {
 	Options *FireProxOptions
 	Client  *apigateway.Client
+	Cache   APICache
 }
 
 type FireProxOptions struct {
@@ -29,6 +31,18 @@ type FireProxOptions struct {
 	Command         string
 	APIID           string
 	URL             string
+	Verbose         bool
+	CacheDuration   time.Duration
+}
+
+type RegionCache struct {
+	APIs      []types.RestApi
+	Timestamp time.Time
+}
+
+type APICache struct {
+	Data  map[string]RegionCache
+	Mutex sync.Mutex
 }
 
 // List of all AWS regions as of 2023-05-10 except governmental regions.
@@ -87,7 +101,10 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 		log.Fatal(err)
 	}
 
-	client := apigateway.NewFromConfig(cfg)
+	client := apigateway.NewFromConfig(cfg, func(options *apigateway.Options) {
+		// Increase the default retry attempts from 3 to 5 as 3 seems to hit request quotas quite often.
+		options.RetryMaxAttempts = 5
+	})
 	fp := &FireProx{
 		Options: &FireProxOptions{
 			AccessKey:       opts.AccessKey,
@@ -98,6 +115,8 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 			Command:         opts.Command,
 			APIID:           opts.APIID,
 			URL:             opts.URL,
+			Verbose:         opts.Verbose,
+			CacheDuration:   opts.CacheDuration * time.Second,
 		},
 		Client: client,
 	}
@@ -110,6 +129,7 @@ func (fp *FireProx) Cleanup() {
 	items, err := fp.ListAPIs()
 	if err != nil {
 		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
+		log.Println(err.Error())
 	}
 	time.Sleep(5 * time.Second)
 	for _, item := range items {
@@ -323,8 +343,28 @@ func (fp *FireProx) storeAPI(apiID, name, createdAT, targetURL, proxyURL string)
 	fmt.Printf("[%v] (%s) %s %s => %s\n", createdAT, apiID, name, proxyURL, targetURL)
 }
 
+// InvalidateCache clears the cached data for a specific region
+func (fp *FireProx) InvalidateCache(region string) {
+	fp.Cache.Mutex.Lock()
+	defer fp.Cache.Mutex.Unlock()
+	delete(fp.Cache.Data, region) // Remove the cache for the specified region
+}
+
 // ListAPIs ...
 func (fp *FireProx) ListAPIs() ([]types.RestApi, error) {
+	region := fp.Options.Region // Assuming region is part of options
+	fp.Cache.Mutex.Lock()
+	defer fp.Cache.Mutex.Unlock()
+
+	// Initialize region cache if not exists
+	if fp.Cache.Data == nil {
+		fp.Cache.Data = make(map[string]RegionCache)
+	}
+
+	if regionCache, exists := fp.Cache.Data[region]; exists && time.Since(regionCache.Timestamp) < fp.Options.CacheDuration {
+		return regionCache.APIs, nil // Return cached data for the region
+	}
+
 	input := &apigateway.GetRestApisInput{}
 
 	resp, err := fp.Client.GetRestApis(context.TODO(), input)
@@ -332,42 +372,77 @@ func (fp *FireProx) ListAPIs() ([]types.RestApi, error) {
 		return nil, err
 	}
 
-	apiIDs := make([]string, len(resp.Items))
-	for i, item := range resp.Items {
-		proxyURL, err := fp.getIntegration(aws.ToString(item.Id))
-		if err != nil {
-			return nil, err
+	if fp.Options.Verbose || fp.Options.Command == "list" {
+		apiIDs := make([]string, len(resp.Items))
+		for i, item := range resp.Items {
+			proxyURL, err := fp.getIntegration(aws.ToString(item.Id))
+			if err != nil {
+				return nil, err
+			}
+			proxyURL = strings.ReplaceAll(proxyURL, "{proxy}", "")
+			proxiedURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(item.Id), fp.Options.Region)
+			fmt.Printf("[%s] (%s) %s: %s => %s\n", item.CreatedDate.String(), aws.ToString(item.Id), aws.ToString(item.Name), proxiedURL, proxyURL)
+			apiIDs[i] = *item.Id
 		}
-		proxyURL = strings.ReplaceAll(proxyURL, "{proxy}", "")
-		proxiedURL := fmt.Sprintf("https://%s.execute-api.%s.amazonaws.com/fireprox/", aws.ToString(item.Id), fp.Options.Region)
-		fmt.Printf("[%s] (%s) %s: %s => %s\n", item.CreatedDate.String(), aws.ToString(item.Id), aws.ToString(item.Name), proxiedURL, proxyURL)
-		apiIDs[i] = *item.Id
+	}
+
+	// Update the cache for the region
+	fp.Cache.Data[region] = RegionCache{
+		APIs:      resp.Items,
+		Timestamp: time.Now(),
 	}
 
 	return resp.Items, nil
 }
 
-// DeleteAPI ...
-func (fp *FireProx) DeleteAPI(apiID string) bool {
-	items, err := fp.ListAPIs()
-	if err != nil {
-		log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
-		return false
+// IfExistsDeleteAPI ...
+func (fp *FireProx) IfExistsDeleteAPI(apiID string) bool {
+	var items []types.RestApi
+	if regionCache, exists := fp.Cache.Data[fp.Options.Region]; exists && time.Since(regionCache.Timestamp) < fp.Options.CacheDuration {
+		items = regionCache.APIs
+	} else {
+		apis, err := fp.ListAPIs()
+		if err != nil {
+			log.Println("Error listing APIs, make sure your aws config/account is properly configured with the appropriate permissions.")
+			log.Println(err.Error())
+			return false
+		}
+		items = apis
 	}
+
 	time.Sleep(5 * time.Second)
 	for _, item := range items {
 		if apiID == *item.Id {
 			input := &apigateway.DeleteRestApiInput{
 				RestApiId: item.Id,
 			}
-			_, err = fp.Client.DeleteRestApi(context.TODO(), input)
+			_, err := fp.Client.DeleteRestApi(context.TODO(), input)
 			if err != nil {
-				log.Println("[ERROR] Failed to delete API:", aws.ToString(item.Id))
+				log.Printf("[ERROR] Failed to delete API: %+v\nError: %+v\n", aws.ToString(item.Id), err.Error())
+				fp.InvalidateCache(fp.Options.Region) // Invalidate cache for the current region
+				return false
 			}
+			fp.InvalidateCache(fp.Options.Region) // Invalidate cache for the current region
 			return true
 		}
 	}
 	return false
+}
+
+// DeleteAPI directly deletes the apiID without confirming the apiID's existence first
+// this helps to reduce api calls that can quickly exceed the quota
+// it returns true if successful, false if err
+func (fp *FireProx) DeleteAPI(apiID string) bool {
+	input := &apigateway.DeleteRestApiInput{
+		RestApiId: aws.String(apiID),
+	}
+	_, err := fp.Client.DeleteRestApi(context.TODO(), input)
+	if err != nil {
+		log.Printf("[ERROR] Failed to delete API: %+v\nError: %+v\n", apiID, err.Error())
+		return false
+	}
+
+	return true
 }
 
 // CreateAPI ...

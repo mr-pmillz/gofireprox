@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -20,6 +21,8 @@ func main() {
 	command := flag.String("command", "", "Commands: list, create, delete, update")
 	apiID := flag.String("api_id", "", "API ID")
 	proxyURL := flag.String("url", "", "URL end-point")
+	verbose := flag.Bool("verbose", false, "toggles verbosity to reduce API requests that fetch additional verbose data")
+	apiCacheDuration := flag.Duration("cache-duration", 60*time.Second, "sets api list cache duration in seconds. Ex. -cache-duration 120s for 120 seconds or 2m for 2 minutes")
 	flag.Parse()
 
 	fpOptions := &gofireprox.FireProxOptions{
@@ -31,6 +34,8 @@ func main() {
 		Command:         *command,
 		APIID:           *apiID,
 		URL:             *proxyURL,
+		Verbose:         *verbose,
+		CacheDuration:   *apiCacheDuration,
 	}
 
 	fp, err := gofireprox.NewFireProx(fpOptions)
