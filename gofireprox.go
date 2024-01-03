@@ -116,7 +116,7 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 			APIID:           opts.APIID,
 			URL:             opts.URL,
 			Verbose:         opts.Verbose,
-			CacheDuration:   opts.CacheDuration * time.Second,
+			CacheDuration:   opts.CacheDuration,
 		},
 		Client: client,
 	}
