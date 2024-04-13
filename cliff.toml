@@ -78,7 +78,6 @@ commit_parsers = [
     { message = "^add", group = "<!-- 0 -->:rocket: New features" },
     { message = "^feat*", group = "<!-- 0 -->:rocket: New features" },
     { message = "^.*: support", group = "<!-- 0 -->:rocket: New features" },
-    { message = "^test", group = "<!-- 1 -->:bug: Bug fixes" },
     { message = "^fix*", group = "<!-- 1 -->:bug: Bug fixes" },
     { message = "^.*: fix", group = "<!-- 1 -->:bug: Bug fixes" },
     { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
