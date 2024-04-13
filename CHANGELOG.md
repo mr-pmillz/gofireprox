@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## What's Changed## [0.1.6](https://github.com/mr-pmillz/gofireprox/compare/v0.1.5..v0.1.6) - 2024-04-13
+
+### :bug: Bug fixes
+
+- Fix api request quota issue increased client RetryMaxAttempts to 20. added changelog via git-cliff
+ - ([606e70c](https://github.com/mr-pmillz/gofireprox/commit/606e70c9ccaef1ae3facddfe7e60e4429116a276))
+
+### 🚜 Refactor
+
+- Refactor git-cliff commit_parsers
+ - ([6336398](https://github.com/mr-pmillz/gofireprox/commit/63363984858121df08c55af33ab2776af4488557))
+
 ## What's Changed## [0.1.5](https://github.com/mr-pmillz/gofireprox/compare/v0.1.4..v0.1.5) - 2024-01-03
 
 ### :bug: Bug fixes
