@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 )
 
+const CurrentVersion = `v0.1.6`
+
 type FireProx struct {
 	Options *FireProxOptions
 	Client  *apigateway.Client
@@ -32,6 +34,7 @@ type FireProxOptions struct {
 	APIID           string
 	URL             string
 	Verbose         bool
+	Version         bool
 	CacheDuration   time.Duration
 }
 
@@ -102,8 +105,8 @@ func NewFireProx(opts *FireProxOptions) (*FireProx, error) {
 	}
 
 	client := apigateway.NewFromConfig(cfg, func(options *apigateway.Options) {
-		// Increase the default retry attempts from 3 to 5 as 3 seems to hit request quotas quite often.
-		options.RetryMaxAttempts = 5
+		// Increase the default retry attempts from 3 to 20 as 3 seems to hit request quotas quite often.
+		options.RetryMaxAttempts = 20
 	})
 	fp := &FireProx{
 		Options: &FireProxOptions{

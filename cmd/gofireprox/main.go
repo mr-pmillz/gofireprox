@@ -22,6 +22,7 @@ func main() {
 	apiID := flag.String("api_id", "", "API ID")
 	proxyURL := flag.String("url", "", "URL end-point")
 	verbose := flag.Bool("verbose", false, "toggles verbosity to reduce API requests that fetch additional verbose data")
+	version := flag.Bool("version", false, "show version of gofireprox")
 	apiCacheDuration := flag.Duration("cache-duration", 60*time.Second, "sets api list cache duration in seconds. Ex. -cache-duration 120s for 120 seconds or 2m for 2 minutes")
 	flag.Parse()
 
@@ -35,7 +36,13 @@ func main() {
 		APIID:           *apiID,
 		URL:             *proxyURL,
 		Verbose:         *verbose,
+		Version:         *version,
 		CacheDuration:   *apiCacheDuration,
+	}
+
+	if fpOptions.Version {
+		fmt.Printf("GoFireprox Current Version: %s\n", gofireprox.CurrentVersion)
+		os.Exit(0)
 	}
 
 	fp, err := gofireprox.NewFireProx(fpOptions)
